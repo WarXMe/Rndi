@@ -1,0 +1,50 @@
+name: RDP
+
+on:
+  workflow_dispatch:
+
+jobs:
+  secure-rdp:
+    runs-on: windows-latest
+    timeout-minutes: 360
+
+    steps:
+      - name: Configure RDP Settings
+        shell: pwsh
+        run: |
+          Set-ItemProperty `
+            -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' `
+            -Name 'fDenyTSConnections' -Value 0 -Force
+
+          Set-ItemProperty `
+            -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' `
+            -Name 'UserAuthentication' -Value 1 -Force
+
+          Enable-NetFirewallRule -DisplayGroup 'Remote Desktop'
+
+      - name: Create RDP User
+        shell: pwsh
+        run: |
+          $password = [guid]::NewGuid().ToString('N') + 'A!7'
+          $securePass = ConvertTo-SecureString `
+            $password -AsPlainText -Force
+
+          New-LocalUser -Name 'RDP' `
+            -Password $securePass `
+            -AccountNeverExpires
+
+          Add-LocalGroupMember `
+            -Group 'Remote Desktop Users' `
+            -Member 'RDP'
+
+          "RDP_USERNAME=RDP" >> $env:GITHUB_ENV
+
+          "RDP_PASSWORD=$password" >> $env:GITHUB_ENV
+
+      - name: Display Runner Information
+        shell: pwsh
+        run: |
+          Write-Host "RDP username: $env:RDP_USERNAME"
+          Write-Host "RDP is enabled on the runner."
+          Write-Host "No Tailscale connection is configured."
+          Write-Host "Runner will stop when the workflow ends."
